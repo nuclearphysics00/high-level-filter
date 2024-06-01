@@ -43,7 +43,7 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
 {
     std::cout << "関数内部" << std::endl;
 
-    // TimeFrameごとに初期化
+    // initialize
     std::vector<std::shared_ptr<int>> t1tof_r_hits;
     std::vector<std::shared_ptr<int>> t1tof_l_hits;
     std::vector<std::shared_ptr<int>> utof_r_hits;
@@ -54,16 +54,11 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
     bool t1tofCondition = false;
     bool ltofCondition = false;
 
-    // TimeFrameのヘッダーサイズを表示
     auto tfHeader = tf.GetHeader();
-    std::cout << "TimeFrameヘッダーサイズ: " << sizeof(*tfHeader) << " bytes" << std::endl;
 
     for (auto& SubTimeFrame : tf) {
-        std::cout << "SubTimeFrame内" << std::endl;
         auto header = SubTimeFrame->GetHeader();
-        auto& hbf = SubTimeFrame->at(0); // SubTimeFrameの上から１つ目のHB
-
-        std::cout << "SubTimeFrameヘッダーサイズ: " << sizeof(*header) << " bytes" << std::endl;
+        auto& hbf = SubTimeFrame->at(0); 
         uint64_t nData = hbf->GetNumData();
 
         for (int i = 0; i < nData; ++i) {
@@ -72,28 +67,26 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
                 TDC64H::Unpack(hbf->UncheckedAt(i), &tdc);
 
                 if (header->femId == 0xc0a802aa) {
-                    //std::cout << "64H_utofv1: " << tdc.tdc << std::endl;
-                    //std::cout << "64H_t1v1: " << tdc.tdc << std::endl;
+                    //If you need the process, write it down.
                 }
             } else if (header->femType == SubTimeFrame::TDC64L) {
                 TDC64L::tdc64 tdc;
                 TDC64L::Unpack(hbf->UncheckedAt(i), &tdc);
                 if (header->femId == 0xc0802aa9 && (tdc.ch == 10 || tdc.ch == 12)) {
-                    //std::cout << "64L_utof: " << tdc.tdc << std::endl;
-                    //std::cout << "64L_t1: " << tdc.tdc << std::endl;
+                    //If you need the process, write it down.
                 }
             } else if (header->femType == SubTimeFrame::TDC64H_V3) {
                 TDC64H_V3::tdc64 tdc;
                 TDC64H_V3::Unpack(hbf->UncheckedAt(i), &tdc);
                 if (header->femId == 0xc0a802aa) {
                     if (tdc.ch == 12) {
-                        // TOF
+                        // TOF process
                         t1tof_r_hits.push_back(std::make_shared<int>(tdc.tdc));
                     } else if (tdc.ch == 10) {
-                        // TOF
+                        // TOF process
                         t1tof_l_hits.push_back(std::make_shared<int>(tdc.tdc));
                     }
-                    // LTOFデータの収集
+                    // LTOF process
                     for (const auto& groupInfo : groupInfoMap) {
                         if (header->femId == groupInfo.second.ip) {
                             if (tdc.ch == groupInfo.second.ch_r) {
@@ -122,7 +115,7 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
         }
     }
 
-    // デバッグ用にリストの内容を表示
+    // for debug
     flt->PrintList(t1tof_r_hits, "t1tof_r_hits");
     flt->PrintList(t1tof_l_hits, "t1tof_l_hits");
     flt->PrintList(utof_r_hits, "utof_r_hits");
@@ -132,7 +125,7 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
         flt->PrintList(ltof_l_hits[i], "ltof_l_hits[" + std::to_string(i + 1) + "]");
     }
 
-    // 平均値の計算
+    // calculate averages R and L
     auto t1_averages = flt->CalculateAveragePairs(t1tof_r_hits, t1tof_l_hits);
     auto utof_averages = flt->CalculateAveragePairs(utof_r_hits, utof_l_hits);
     std::vector<std::vector<std::shared_ptr<int>>> ltof_averages(6);
@@ -140,7 +133,7 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
         ltof_averages[i] = flt->CalculateAveragePairs(ltof_r_hits[i], ltof_l_hits[i]);
     }
 
-    // ut1tofとutofのTOFを計算し、判定
+    // calculate averages of TOF
     flt->CalculateAndPrintTOF(utof_averages, t1_averages);
     for (const auto& t1_avg : t1_averages) {
         for (const auto& utof_avg : utof_averages) {
@@ -155,7 +148,7 @@ bool FilterTimeFrameSliceBySomething::ProcessSlice(TTF& tf)
         }
     }
 
-    // utofとltofの平均値の引き算結果をリストとしてダンプ
+    // Dump the result of subtracting the average of utof and ltof as a list
     for (const auto& utof_avg : utof_averages) {
         for (size_t i = 0; i < 6; ++i) {
             for (const auto& ltof_avg : ltof_averages[i]) {
